@@ -1,21 +1,87 @@
+@import url('https://fonts.googleapis.cn/css2?family=Noto+Sans+SC:wght@400;500;700&family=Noto+Serif+SC:wght@600;700&display=swap');
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+  body {
+    @apply bg-paper text-ink font-sanscn;
+    background-image: radial-gradient(
+        circle at 15% 0%,
+        rgba(47, 107, 82, 0.05),
+        transparent 45%
+      ),
+      radial-gradient(circle at 90% 12%, rgba(207, 74, 55, 0.04), transparent 40%);
+    background-attachment: fixed;
+    min-height: 100vh;
+  }
+
+  .dark body {
+    @apply bg-[#161512] text-[#ece7dc];
+    background-image: radial-gradient(
+        circle at 15% 0%,
+        rgba(94, 163, 126, 0.08),
+        transparent 45%
+      ),
+      radial-gradient(circle at 90% 12%, rgba(207, 74, 55, 0.05), transparent 40%);
+  }
+
+  /* 主题切换时颜色平滑过渡 */
+  body,
+  .theme-aware {
+    transition:
+      background-color 0.25s ease,
+      color 0.25s ease,
+      border-color 0.25s ease;
+  }
+
+  ::selection {
+    @apply bg-pine-100 text-pine-700;
+  }
+
+  .dark ::selection {
+    background: rgba(94, 163, 126, 0.3);
+    color: #eaf5ee;
+  }
+
+  /* 细滚动条（横向分类筛选条） */
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(138, 132, 120, 0.4) transparent;
+  }
+  .scrollbar-thin::-webkit-scrollbar {
+    height: 4px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background: rgba(138, 132, 120, 0.4);
+    border-radius: 999px;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@layer components {
+  /* 勾选完成时的划线动画 */
+  .strike-line {
+    background-image: linear-gradient(currentColor, currentColor);
+    background-repeat: no-repeat;
+    background-position: 0 50%;
+    background-size: 0% 1.5px;
+    transition: background-size 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .strike-line.is-done {
+    background-size: 100% 1.5px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }

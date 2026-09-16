@@ -6,21 +6,34 @@ import express from 'express';
 import path from 'path';
 import fs from 'fs';
 import { createServer as createViteServer } from 'vite';
-import viteConfig from '../vite.config';
 
 const isDev = process.env.COZE_PROJECT_ENV !== 'PROD';
 
 /**
  * 集成 Vite 开发服务器（中间件模式）
+ *
+ * 注意：不要在此处 import 并展开项目根目录的 vite.config.ts —— Vite 会自动
+ * 加载该配置文件，再展开一遍会导致其中的插件（如 @vitejs/plugin-react）被
+ * 注册两次，Fast Refresh 代码重复注入，触发
+ * `The symbol "$RefreshReg$" has already been declared` 转换错误。
+ * 此处仅补充中间件模式必须的 server 覆盖项。
  */
 export async function setupViteMiddleware(app: Application) {
   const vite = await createViteServer({
-    ...viteConfig,
-    server: {
-      ...viteConfig.server,
-      middlewareMode: true,
-    },
+    root: process.cwd(),
     appType: 'spa',
+    server: {
+      middlewareMode: true,
+      host: '0.0.0.0',
+      allowedHosts: true,
+      hmr: {
+        path: '/hot/vite-hmr',
+      },
+      watch: {
+        usePolling: true,
+        interval: 100,
+      },
+    },
   });
 
   // 使用 Vite middleware

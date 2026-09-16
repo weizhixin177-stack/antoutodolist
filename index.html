@@ -3,11 +3,23 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="扣子编程，你的 AI 开发伙伴已就位" />
-    <title>扣子编程 - AI 开发伙伴</title>
+    <meta name="description" content="案头清单 —— 一款安静、克制、顺手的待办事项工具" />
+    <title>案头清单 · Todo</title>
+    <script>
+      // 首屏前确定主题，避免深色模式闪烁
+      (function () {
+        try {
+          var saved = localStorage.getItem('antou.theme.v1');
+          var theme = saved ? JSON.parse(saved) : 'light';
+          if (theme === 'dark') document.documentElement.classList.add('dark');
+        } catch (e) {
+          /* 忽略损坏的存储 */
+        }
+      })();
+    </script>
   </head>
   <body>
-    <div id="app"></div>
-    <script type="module" src="/src/index.ts"></script>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
