@@ -10,6 +10,9 @@
     "lint:build": "eslint . --quiet",
     "lint:style": "stylelint \"src/**/*.css\"",
     "start": "bash ./scripts/start.sh",
+    "tauri": "tauri",
+    "tauri:dev": "tauri dev",
+    "tauri:build": "tauri build",
     "ts-check": "tsc -p tsconfig.json",
     "validate": "pnpm dlx concurrently --group --names lint-tsc,lint-build,lint-style \"pnpm ts-check\" \"pnpm lint:build\" \"pnpm lint:style\""
   },
@@ -25,6 +28,7 @@
     "react-dom": "^19.3.0"
   },
   "devDependencies": {
+    "@tauri-apps/cli": "^2",
     "@types/express": "^5.0.0",
     "@types/node": "^22.10.5",
     "@types/react": "^19.3.0",

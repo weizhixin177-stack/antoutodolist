@@ -1,13 +1,14 @@
 # 项目上下文
 
-「案头清单」—— 东方纸感编辑风的网页版待办清单（Todo List），纯前端应用，数据存 localStorage。
+「案头清单」—— 东方纸感编辑风的待办清单（Todo List），纯前端应用，数据存 localStorage。同时提供 Web 版与 Tauri 2 桌面版（macOS .app / .dmg）。
 
 ## 技术栈
 
 - **核心**: Vite 7, React 19, TypeScript 5, Express（仅承载 Vite 中间件与静态产物）
+- **桌面**: Tauri 2（`src-tauri/`），复用 `dist/` 产物，壳内数据同样走 localStorage
 - **UI**: Tailwind CSS 3（`darkMode: 'class'`）
 - **拖拽**: @dnd-kit/core + @dnd-kit/sortable（支持鼠标 / 触摸 / 键盘）
-- **图标**: lucide-react
+- **图标**: lucide-react；App 图标 `src-tauri/app-icon.jpg`（AI 生成，2048²）
 - **字体**: Noto Serif SC（标题）+ Noto Sans SC（正文），Google Fonts `.cn` 域名引入
 
 ## 目录结构
@@ -37,10 +38,17 @@
 │   ├── main.tsx                # React 入口
 │   └── index.css               # Tailwind + 字体 + 主题变量 + 动效
 ├── index.html                  # 含首屏防深色闪烁内联脚本
+├── src-tauri/                  # Tauri 2 桌面壳（Rust）
+│   ├── tauri.conf.json         # 窗口/打包配置，identifier: com.antou.todo
+│   ├── Cargo.toml              # lib 名 antou_todo_lib（勿改，main.rs 引用）
+│   ├── src/main.rs + lib.rs    # 标准入口，无自定义 command
+│   ├── capabilities/default.json
+│   ├── app-icon.jpg            # 图标源图（JPEG 2048²，改后用 pnpm tauri icon 重生成）
+│   └── icons/                  # 由 tauri icon 生成的全套图标（含 icon.icns）
 ├── DESIGN.md                   # 设计语言（改 UI 前必读）
 ├── tailwind.config.js
 ├── tsconfig.json               # moduleResolution: bundler（勿改回 node）
-└── vite.config.ts              # @vitejs/plugin-react 必须 5.x（6.x peer 为 Vite 8）
+└── vite.config.ts              # 双环境：TAURI_ENV_PLATFORM 存在时走 Tauri 配置（5173 strictPort）
 ```
 
 ## 包管理规范
@@ -52,6 +60,18 @@
 - `pnpm dev`（经 scripts/dev.sh，监听 `$DEPLOY_RUN_PORT`，HMR 路径 `/hot/vite-hmr`）
 - `pnpm build`：Vite 构建到 `dist/` + tsup 打包 server 到 `dist-server/`
 - `pnpm ts-check` / `pnpm lint --quiet`：交付前必过
+
+## Mac 桌面打包（在本机 Mac 上执行，沙箱为 Linux 无法出包）
+
+前置（一次性）：`xcode-select --install`；Rust 工具链（`curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`）；Node + pnpm。
+
+- `pnpm tauri:dev`：桌面开发模式（自动起 Vite 5173 + 壳窗口，HMR 生效）
+- `pnpm tauri:build`：发布构建（自动执行 `pnpm vite build`）
+  - 产物：`src-tauri/target/release/bundle/macos/案头清单.app`
+  - 安装包：`src-tauri/target/release/bundle/dmg/案头清单_1.0.0_<arch>.dmg`
+- 首次构建需下载编译 Rust 依赖，耐心等待；之后增量编译很快
+- 默认只出当前架构包；Intel+M 芯片通用包：`rustup target add aarch64-apple-darwin x86_64-apple-darwin` 后 `pnpm tauri build -- --target universal-apple-darwin`
+- 未签名分发：接收方首次需右键「打开」，或 `xattr -cr /Applications/案头清单.app`；正式分发需 Apple 开发者账号签名公证
 
 ## 数据与功能约定
 
@@ -68,6 +88,8 @@
 2. `$RefreshReg$ has already been declared`：server/vite.ts 不得 import 展开根目录 vite.config（Vite 会自动加载，导致 react 插件注册两次）。
 3. @vitejs/plugin-react 6.x peer 为 Vite 8，会引用未导出的 `vite/internal`；本项目锁定 5.x。
 4. Express 错误处理中间件必须是 `(err, req, res, next)` 四参数签名。
+5. AI 生图 CLI 下载的文件可能是 JPEG 却带 .png 扩展名，`tauri icon` 会按签名解码报 `Invalid PNG signature`——按真实格式命名即可。
+6. `vite.config.ts` 依赖 `TAURI_ENV_PLATFORM` 区分 Tauri / Web 两套 server 配置，修改时两侧都要顾及。
 
 ## 编码规范
 
