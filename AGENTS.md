@@ -77,27 +77,31 @@
 
 ## 数据与功能约定
 
-- Todo：`{ id, title, completed, category, priority, createdAt, deadline? }`
+- Todo：`{ id, title, completed, category, priority, createdAt, deadline?, location? }`
 - 分类固定 4 项：work / life / study / other；优先级：high / medium / low
 - 存储 key：`antou.todos.v1`、`antou.theme.v1`
 - 拖拽重排基于**筛选后的可见列表**计算 index，再映射回完整数组，保持隐藏项槽位
 - 清空已完成需二次点击确认（3s 超时复位）
-- 编辑态：Enter 保存、Esc 取消；同时可改分类、优先级、截止时间
+- 编辑态：Enter 保存、Esc 取消；可改标题、分类、优先级（截止时间只能由 AI 理解生成，无手动入口）
 
-## 语音输入 AI 识别（依赖后端）
+## AI 智能理解（依赖后端）
 
 - 入口组件 `src/components/VoiceInput.tsx`：探测 `/api/health` 可达才渲染（Web 可用；Tauri 桌面壳无后端则隐藏）。
 - 录音：`getUserMedia({audio:true})` + MediaRecorder，按能力优选 ASR 支持的编码 `audio/ogg;codecs=opus` / `audio/mp4`，最后经 onstop 后再停轨道以避免截尾。
-- 后端 `server/routes/voice.ts` 的 `POST /api/voice-todo`：接收 `{ audioBase64, mimeType }` → 扣子 ASR `recognize` 转写 → LLM（`doubao-seed-2-0-mini-260215`，`invoke` 非流式）解析为 `{ title, priority, category, deadline }`，deadline 规整为 `YYYY-MM-DDTHH:mm`。
+- 后端 `server/routes/voice.ts`：
+  - `POST /api/voice-todo`：接收 `{ audioBase64, mimeType }` → 扣子 ASR `recognize` 转写 → LLM 解析。
+  - `POST /api/parse-todo`：接收 `{ text }` → LLM 直接理解文本（TodoForm 手动输入提交时调用，无 datetime-local 手动选时间）。
+  - 两者共享 `parseTodoText`：LLM（`doubao-seed-2-0-mini-260215`，`invoke` 非流式）解析为 `{ title, priority, category, deadline?, location? }`，deadline 规整为 `YYYY-MM-DDTHH:mm`，location 为提取的简短地点名。
 - 走 `coze-coding-dev-sdk`（ASRClient / LLMClient / Config / HeaderUtils），消耗扣子额度；SDK 有 CJS 构建，tsup 到 `dist-server` 可正常打包（勿 external）。
+- 前端解析客户端在 `src/lib/parseTodo.ts`（`parseTodoText` + `deadlineStringToTs`）；解析失败/无后端时降级为按原文 + 表单所选分类优先级记下。
 - 语音入口的可用性依赖 Express 后端，桌面壳（纯静态）自动降级为纯手输。
 
 ## 倒计时与截止
 
-- `deadline` 为可选时间戳（ms）；新增/编辑经 `datetime-local` 转 `new Date(str).getTime()`。
+- `deadline` 为可选时间戳（ms），只能由 AI 理解输入文本产生（如「今晚8点完成华为项目」），已移除 datetime-local 手动选择。
 - 单界面原则：不做全屏倒计时页。倒计时内嵌在卡片元信息下方（`TodoItem.tsx` 内 `DeadlineProgress` 组件）。
-- `DeadlineProgress`：每秒 tick；左侧读秒「还剩/已超时 HH:MM:SS」，右侧截止时刻；下方细进度条按 (now-createdAt)/(deadline-createdAt) 填充；未过期松绿 / 30 分钟内朱砂 / 超时朱砂加深且充满。
-- 工具函数在 `src/lib/utils.ts`：`formatCountdown` / `describeDeadline` / `toDatetimeLocal` / `formatTime`。
+- `DeadlineProgress` 为 BOSS 血条：血量 = 剩余时间占比（满血→耗尽），每秒 tick 线性扣减；深红血槽 + 朱砂渐变血量 + 顶部高光 + 外发光；左侧 Swords 图标读秒「还剩/已超时 HH:MM:SS」，右侧截止时刻；30 分钟内低血量脉冲，超时血量归零且空槽红光闪烁。
+- 工具函数在 `src/lib/utils.ts`：`formatCountdown` / `formatTime`。
 
 ## 关键排障记录
 

@@ -1,16 +1,16 @@
 import { useEffect, useRef, useState } from 'react';
 import {
-  CalendarClock,
   Check,
   GripVertical,
+  MapPin,
   Pencil,
   Save,
-  Timer,
+  Swords,
   Trash2,
   X,
 } from 'lucide-react';
 import { CATEGORIES, CATEGORY_MAP, PRIORITIES, PRIORITY_MAP } from '../lib/constants';
-import { formatCountdown, formatTime, toDatetimeLocal } from '../lib/utils';
+import { formatCountdown, formatTime } from '../lib/utils';
 import type { CategoryId, Priority, Todo } from '../types';
 
 interface TodoItemViewProps {
@@ -24,14 +24,13 @@ interface TodoItemViewProps {
     title: string,
     category: CategoryId,
     priority: Priority,
-    deadline?: number,
   ) => void;
   onCancelEdit: () => void;
   dragHandleProps?: Record<string, unknown>;
   dragging?: boolean;
 }
 
-/** 卡片内嵌倒计时进度条：随时间流逝填充，临近/超时转朱砂 */
+/** BOSS 血条式倒计时：从满血开始随时间消耗，血量越少越危险 */
 function DeadlineProgress({ deadline, createdAt }: { deadline: number; createdAt: number }) {
   const [now, setNow] = useState(() => Date.now());
 
@@ -40,45 +39,65 @@ function DeadlineProgress({ deadline, createdAt }: { deadline: number; createdAt
     return () => window.clearInterval(id);
   }, []);
 
-  const overdue = deadline <= now;
-  const urgent = !overdue && deadline - now < 30 * 60 * 1000;
   const total = Math.max(1, deadline - createdAt);
-  const pct = overdue ? 100 : Math.min(100, Math.max(0, ((now - createdAt) / total) * 100));
-  const remainSec = Math.floor(Math.abs(deadline - now) / 1000);
-
-  const barColor = overdue
-    ? 'bg-cinnabar-600 dark:bg-cinnabar-500'
-    : urgent
-      ? 'bg-cinnabar-500 dark:bg-cinnabar-400'
-      : 'bg-pine-500 dark:bg-[#5ea37e]';
-  const textColor =
-    overdue || urgent
-      ? 'text-cinnabar-600 dark:text-[#e88070]'
-      : 'text-pine-700 dark:text-[#5ea37e]';
+  const remaining = deadline - now;
+  const overdue = remaining <= 0;
+  // 血量 = 剩余时间占比，满血 100% → 耗尽 0%
+  const hp = overdue ? 0 : Math.min(100, Math.max(0, (remaining / total) * 100));
+  const lowHp = !overdue && remaining < 30 * 60 * 1000;
+  const remainSec = Math.floor(Math.abs(remaining) / 1000);
 
   return (
-    <div className="mt-1.5">
+    <div className="mt-2">
       <div className="flex items-center justify-between gap-2 text-[11px] leading-4">
-        <span className={`inline-flex items-center gap-1 font-medium tabular-nums ${textColor}`}>
-          <Timer className="h-3 w-3" strokeWidth={2} />
+        <span
+          className={`inline-flex items-center gap-1 font-semibold tabular-nums ${
+            overdue || lowHp
+              ? 'text-cinnabar-600 dark:text-[#ff7a63]'
+              : 'text-cinnabar-600/90 dark:text-[#e88070]'
+          }`}
+        >
+          <Swords className={`h-3 w-3 ${lowHp && !overdue ? 'animate-pulse' : ''}`} strokeWidth={2.2} />
           {overdue ? '已超时' : '还剩'} {formatCountdown(remainSec)}
         </span>
         <span className="tabular-nums text-ink-faint/80 dark:text-[#7d7668]">
           截止 {formatTime(deadline)}
         </span>
       </div>
+
+      {/* 血条槽 */}
       <div
         role="progressbar"
         aria-valuemin={0}
         aria-valuemax={100}
-        aria-valuenow={Math.round(pct)}
-        aria-label="距截止时间进度"
-        className="mt-1 h-1 overflow-hidden rounded-full bg-ink/[0.07] dark:bg-white/10"
+        aria-valuenow={Math.round(hp)}
+        aria-label="剩余时间血量"
+        className={`relative mt-1 h-2.5 overflow-hidden rounded-sm border bg-[#3a1512]/90 dark:bg-black/60 ${
+          overdue
+            ? 'border-cinnabar-700 dark:border-cinnabar-500/60'
+            : 'border-cinnabar-800/70 dark:border-cinnabar-500/40'
+        } shadow-[inset_0_1px_3px_rgba(0,0,0,0.5)]`}
       >
+        {/* 血量 */}
         <div
-          className={`h-full rounded-full transition-[width] duration-1000 ease-linear ${barColor}`}
-          style={{ width: `${pct}%` }}
-        />
+          className={`h-full transition-[width] duration-1000 ease-linear ${
+            lowHp && !overdue ? 'animate-pulse' : ''
+          }`}
+          style={{
+            width: `${hp}%`,
+            background: overdue
+              ? 'transparent'
+              : 'linear-gradient(180deg, #ff7a5c 0%, #cf4a37 45%, #a02c1d 100%)',
+            boxShadow: hp > 0 ? '0 0 8px rgba(207,74,55,0.55)' : 'none',
+          }}
+        >
+          {/* 血条高光 */}
+          <div className="h-[40%] w-full bg-white/25" />
+        </div>
+        {/* 耗尽后空槽闪烁提示 */}
+        {overdue && (
+          <div className="absolute inset-0 animate-pulse bg-cinnabar-600/30" />
+        )}
       </div>
     </div>
   );
@@ -133,7 +152,7 @@ export default function TodoItem({
         <EditForm
           key="edit"
           todo={todo}
-          onSave={(title, cat, pri, dl) => onSaveEdit(todo.id, title, cat, pri, dl)}
+          onSave={(title, cat, pri) => onSaveEdit(todo.id, title, cat, pri)}
           onCancel={onCancelEdit}
         />
       ) : (
@@ -156,6 +175,12 @@ export default function TodoItem({
               <span className={`h-1.5 w-1.5 rounded-full ${priority.dot}`} />
               {priority.label}优先级
             </span>
+            {todo.location && (
+              <span className="inline-flex items-center gap-0.5">
+                <MapPin className="h-3 w-3" strokeWidth={2} />
+                {todo.location}
+              </span>
+            )}
             <span className="tabular-nums">{formatTime(todo.createdAt)}</span>
           </div>
           {todo.deadline && !todo.completed && (
@@ -203,7 +228,6 @@ interface EditFormProps {
     title: string,
     category: CategoryId,
     priority: Priority,
-    deadline?: number,
   ) => void;
   onCancel: () => void;
 }
@@ -212,9 +236,6 @@ function EditForm({ todo, onSave, onCancel }: EditFormProps) {
   const [title, setTitle] = useState(todo.title);
   const [category, setCategory] = useState<CategoryId>(todo.category);
   const [priority, setPriority] = useState<Priority>(todo.priority);
-  const [deadline, setDeadline] = useState(
-    todo.deadline ? toDatetimeLocal(todo.deadline) : '',
-  );
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -225,8 +246,7 @@ function EditForm({ todo, onSave, onCancel }: EditFormProps) {
   const handleSave = () => {
     const trimmed = title.trim();
     if (!trimmed) return;
-    const deadlineTs = deadline ? new Date(deadline).getTime() : undefined;
-    onSave(trimmed, category, priority, deadlineTs);
+    onSave(trimmed, category, priority);
   };
 
   const selectCls =
@@ -272,22 +292,6 @@ function EditForm({ todo, onSave, onCancel }: EditFormProps) {
             </option>
           ))}
         </select>
-        <label
-          title="截止时间（用于倒计时）"
-          className={`inline-flex items-center gap-1.5 ${selectCls}`}
-        >
-          <CalendarClock
-            className="h-3.5 w-3.5 text-pine-600 dark:text-[#5ea37e]"
-            strokeWidth={2}
-          />
-          <input
-            type="datetime-local"
-            value={deadline}
-            onChange={(e) => setDeadline(e.target.value)}
-            aria-label="编辑截止时间"
-            className="bg-transparent text-xs text-ink-soft outline-none dark:text-[#cfc8ba] [&::-webkit-calendar-picker-indicator]:opacity-50"
-          />
-        </label>
         <div className="ml-auto flex items-center gap-1">
           <button
             type="button"

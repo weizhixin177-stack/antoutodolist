@@ -11,6 +11,8 @@ export interface Todo {
   createdAt: number;
   /** 截止时间（毫秒时间戳），用于倒计时 */
   deadline?: number;
+  /** 地点（由 AI 从内容中理解提取） */
+  location?: string;
 }
 
 export type StatusFilter = 'all' | 'active' | 'completed';

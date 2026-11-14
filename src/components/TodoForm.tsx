@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
-import { CalendarClock, CornerDownLeft, Plus } from 'lucide-react';
+import { CornerDownLeft, Loader2, Plus, Sparkles } from 'lucide-react';
 import { CATEGORIES, PRIORITIES } from '../lib/constants';
+import { deadlineStringToTs, parseTodoText } from '../lib/parseTodo';
 import type { CategoryId, Priority } from '../types';
 import VoiceInput from './VoiceInput';
 
@@ -10,6 +11,7 @@ interface TodoFormProps {
     category: CategoryId,
     priority: Priority,
     deadline?: number,
+    location?: string,
   ) => void;
 }
 
@@ -18,17 +20,55 @@ export default function TodoForm({ onAdd }: TodoFormProps) {
   const [category, setCategory] = useState<CategoryId>('work');
   const [priority, setPriority] = useState<Priority>('medium');
   const [deadline, setDeadline] = useState('');
+  const [location, setLocation] = useState('');
   const [voiceApplied, setVoiceApplied] = useState(false);
+  const [parsing, setParsing] = useState(false);
 
-  const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    const trimmed = title.trim();
-    if (!trimmed) return;
-    const deadlineTs = deadline ? new Date(deadline).getTime() : undefined;
-    onAdd(trimmed, category, priority, deadlineTs);
+  const reset = () => {
     setTitle('');
     setDeadline('');
+    setLocation('');
     setVoiceApplied(false);
+  };
+
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const trimmed = title.trim();
+    if (!trimmed || parsing) return;
+
+    // 语音已解析过：直接用解析结果，不重复调用 AI
+    if (voiceApplied) {
+      onAdd(
+        trimmed,
+        category,
+        priority,
+        deadlineStringToTs(deadline) ?? undefined,
+        location || undefined,
+      );
+      reset();
+      return;
+    }
+
+    // 手动输入：交给 AI 理解文字里的时间、地点、优先级、分类
+    setParsing(true);
+    try {
+      const parsed = await parseTodoText(trimmed);
+      if (parsed) {
+        onAdd(
+          parsed.title || trimmed,
+          parsed.category || category,
+          parsed.priority || priority,
+          deadlineStringToTs(parsed.deadline),
+          parsed.location,
+        );
+      } else {
+        // AI 不可用（如桌面壳无后端）：按原文 + 当前选择记下
+        onAdd(trimmed, category, priority);
+      }
+    } finally {
+      setParsing(false);
+      reset();
+    }
   };
 
   return (
@@ -47,7 +87,7 @@ export default function TodoForm({ onAdd }: TodoFormProps) {
           placeholder={
             voiceApplied
               ? 'AI 已识别待办，可微调后回车记下…'
-              : '写下一件待办，回车即可记下；或用右侧麦克风语音输入'
+              : '直接写，如「今晚8点完成华为项目」，AI 自动理解时间与优先级'
           }
           maxLength={120}
           aria-label="待办内容"
@@ -59,6 +99,7 @@ export default function TodoForm({ onAdd }: TodoFormProps) {
             setCategory(p.category);
             setPriority(p.priority);
             setDeadline(p.deadline ?? '');
+            setLocation(p.location ?? '');
             setVoiceApplied(true);
           }}
         />
@@ -94,17 +135,6 @@ export default function TodoForm({ onAdd }: TodoFormProps) {
         </div>
 
         <div className="ml-auto flex flex-wrap items-center gap-2">
-          <label className="inline-flex items-center gap-1.5 rounded-lg border border-ink/10 bg-paper-deep px-2 py-1 text-xs text-ink-soft dark:border-white/10 dark:bg-white/[0.06] dark:text-[#a8a194]">
-            <CalendarClock className="h-3.5 w-3.5 text-pine-600 dark:text-[#5ea37e]" strokeWidth={2} />
-            <input
-              type="datetime-local"
-              value={deadline}
-              onChange={(e) => setDeadline(e.target.value)}
-              aria-label="截止时间（用于倒计时）"
-              className="bg-transparent text-ink outline-none dark:text-[#ece7dc] [&::-webkit-calendar-picker-indicator]:opacity-50"
-            />
-          </label>
-
           <div
             className="flex items-center gap-0.5 rounded-lg bg-paper-deep p-0.5 dark:bg-white/[0.06]"
             role="radiogroup"
@@ -137,12 +167,27 @@ export default function TodoForm({ onAdd }: TodoFormProps) {
 
           <button
             type="submit"
-            disabled={!title.trim()}
+            disabled={!title.trim() || parsing}
             className="inline-flex items-center gap-1 rounded-lg bg-pine-600 px-3.5 py-1.5 text-sm font-medium text-white transition-all duration-200 hover:bg-pine-700 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40 dark:bg-pine-500 dark:text-[#0f1a14] dark:hover:bg-[#6fb38d]"
           >
-            <Plus className="h-4 w-4" strokeWidth={2.2} />
-            记下
-            <CornerDownLeft className="h-3 w-3 opacity-70" strokeWidth={2} />
+            {parsing ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" strokeWidth={2.2} />
+                AI 理解中
+              </>
+            ) : voiceApplied ? (
+              <>
+                <Sparkles className="h-4 w-4" strokeWidth={2.2} />
+                记下
+                <CornerDownLeft className="h-3 w-3 opacity-70" strokeWidth={2} />
+              </>
+            ) : (
+              <>
+                <Plus className="h-4 w-4" strokeWidth={2.2} />
+                记下
+                <CornerDownLeft className="h-3 w-3 opacity-70" strokeWidth={2} />
+              </>
+            )}
           </button>
         </div>
       </div>

@@ -9,6 +9,7 @@ export interface ParsedVoiceTodo {
   priority: Priority;
   category: CategoryId;
   deadline?: string; // "YYYY-MM-DDTHH:mm"
+  location?: string;
 }
 
 interface VoiceInputProps {

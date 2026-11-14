@@ -15,7 +15,6 @@ interface SortableTodoItemProps {
     title: string,
     category: CategoryId,
     priority: Priority,
-    deadline?: number,
   ) => void;
   onCancelEdit: () => void;
 }

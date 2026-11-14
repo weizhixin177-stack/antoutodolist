@@ -99,6 +99,7 @@ export default function App() {
     category: CategoryId,
     priority: Priority,
     deadline?: number,
+    location?: string,
   ) => {
     const todo: Todo = {
       id: createId(),
@@ -108,6 +109,7 @@ export default function App() {
       priority,
       createdAt: Date.now(),
       deadline: deadline && !Number.isNaN(deadline) ? deadline : undefined,
+      location: location || undefined,
     };
     setTodos((prev) => [todo, ...prev]);
   };
@@ -128,20 +130,10 @@ export default function App() {
     title: string,
     category: CategoryId,
     priority: Priority,
-    deadline?: number,
   ) => {
     setTodos((prev) =>
       prev.map((t) =>
-        t.id === id
-          ? {
-              ...t,
-              title,
-              category,
-              priority,
-              deadline:
-                deadline && !Number.isNaN(deadline) ? deadline : undefined,
-            }
-          : t,
+        t.id === id ? { ...t, title, category, priority } : t,
       ),
     );
     setEditingId(null);
