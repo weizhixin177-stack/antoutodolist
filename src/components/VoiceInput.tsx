@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Loader2, Mic, Square, Sparkles } from 'lucide-react';
+import { apiFetch, resolveApiBase } from '../lib/api';
 
 type Priority = 'high' | 'medium' | 'low';
 type CategoryId = 'work' | 'life' | 'study' | 'other';
@@ -37,7 +38,7 @@ function blobToBase64(blob: Blob): Promise<string> {
 }
 
 export default function VoiceInput({ onParsed, disabled }: VoiceInputProps) {
-  // 是否可用（需要后端 API 存在，Tauri 桌面壳无后端则隐藏麦克风）
+  // 是否可用（同源或云端 API 可达即可用，桌面壳会自动回退云端）
   const [available, setAvailable] = useState<boolean | null>(null);
   const [recording, setRecording] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -48,13 +49,15 @@ export default function VoiceInput({ onParsed, disabled }: VoiceInputProps) {
   const streamRef = useRef<MediaStream | null>(null);
   const mimeRef = useRef('');
 
-  // 探测后端是否可达
+  // 探测后端是否可达（同源 → 云端域名 依次尝试）
   useEffect(() => {
-    const ctrl = new AbortController();
-    fetch('/api/health', { signal: ctrl.signal })
-      .then((r) => setAvailable(r.ok))
-      .catch(() => setAvailable(false));
-    return () => ctrl.abort();
+    let cancelled = false;
+    resolveApiBase().then((base) => {
+      if (!cancelled) setAvailable(base !== null);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // 卸载时释放麦克风轨道
@@ -91,7 +94,13 @@ export default function VoiceInput({ onParsed, disabled }: VoiceInputProps) {
       recorder.start();
       setRecording(true);
     } catch {
-      setError('无法访问麦克风，请在浏览器设置中允许后重试');
+      // Tauri 桌面壳 protocol 为 tauri:，据此区分提示文案
+      const isDesktop = !window.location.protocol.startsWith('http');
+      setError(
+        isDesktop
+          ? '无法访问麦克风：请在 系统设置 → 隐私与安全性 → 麦克风 中允许本应用'
+          : '无法访问麦克风，请在浏览器设置中允许后重试',
+      );
     }
   };
 
@@ -120,7 +129,7 @@ export default function VoiceInput({ onParsed, disabled }: VoiceInputProps) {
       const blob = new Blob(chunks, { type: recorder.mimeType || 'audio/ogg' });
       const base64 = await blobToBase64(blob);
 
-      const resp = await fetch('/api/voice-todo', {
+      const resp = await apiFetch('/api/voice-todo', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -128,6 +137,7 @@ export default function VoiceInput({ onParsed, disabled }: VoiceInputProps) {
           mimeType: recorder.mimeType || mimeRef.current,
         }),
       });
+      if (!resp) throw new Error('AI 服务当前不可达，请检查网络后重试');
       const data = await resp.json();
       if (!resp.ok) throw new Error(data.error || '识别失败');
 

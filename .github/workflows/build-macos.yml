@@ -34,6 +34,10 @@ jobs:
       - name: 安装前端依赖
         run: pnpm install --frozen-lockfile
 
+      # 桌面壳本地无后端，注入云端 API 基地址，构建时被 Vite 打进前端产物
+      - name: 写入桌面端云端 API 地址
+        run: echo "VITE_API_BASE_URL=https://1c378ca2-126c-44eb-aa15-1e88bcffe378.dev.coze.site" > .env.production
+
       - name: 构建 Tauri 应用（自动先执行 pnpm vite build，默认当前架构 aarch64）
         run: pnpm tauri build
 

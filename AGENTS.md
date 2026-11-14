@@ -33,21 +33,26 @@
 │   │   ├── useLocalStorage.ts  # 状态与 localStorage 双向同步
 │   │   └── useTheme.ts         # 主题持久化 + html.dark 切换
 │   ├── lib/
+│   │   ├── api.ts              # API 基址探测与回退（resolveApiBase/apiFetch，同源→云端）
+│   │   ├── parseTodo.ts        # AI 文本理解客户端（parseTodoText/deadlineStringToTs）
 │   │   ├── constants.ts        # 分类、优先级元数据与 Tailwind 类、示例数据
-│   │   └── utils.ts            # createId / formatTime / formatCountdown / describeDeadline
+│   │   └── utils.ts            # createId / formatTime / formatCountdown
 │   ├── types.ts                # Todo(含 deadline?) / Priority / CategoryId / Filters
 │   ├── App.tsx                 # 状态中枢：增删改、筛选、统计、拖拽重排
 │   ├── main.tsx                # React 入口
 │   └── index.css               # Tailwind + 字体 + 主题变量 + 动效
 ├── index.html                  # 含首屏防深色闪烁内联脚本
 ├── src-tauri/                  # Tauri 2 桌面壳（Rust）
-│   ├── tauri.conf.json         # 窗口/打包配置，identifier: com.antou.todo
+│   ├── tauri.conf.json         # 窗口/打包配置，identifier: com.antou.todo，v1.1.0 起 macOS 关联 Entitlements.plist
+│   ├── Info.plist              # 补充权限声明（NSMicrophoneUsageDescription），Tauri 打包自动合并
+│   ├── Entitlements.plist      # com.apple.security.device.audio-input（麦克风必需）
 │   ├── Cargo.toml              # lib 名 antou_todo_lib（勿改，main.rs 引用）
 │   ├── src/main.rs + lib.rs    # 标准入口，无自定义 command
 │   ├── capabilities/default.json
 │   ├── app-icon.jpg            # 图标源图（JPEG 2048²，改后用 pnpm tauri icon 重生成）
 │   └── icons/                  # 由 tauri icon 生成的全套图标（含 icon.icns）
 ├── DESIGN.md                   # 设计语言（改 UI 前必读）
+├── .github/workflows/build-macos.yml  # macOS 云端出 dmg：构建前写 .env.production 注入 VITE_API_BASE_URL
 ├── tailwind.config.js
 ├── tsconfig.json               # moduleResolution: bundler（勿改回 node）
 └── vite.config.ts              # 双环境：TAURI_ENV_PLATFORM 存在时走 Tauri 配置（5173 strictPort）
@@ -84,17 +89,18 @@
 - 清空已完成需二次点击确认（3s 超时复位）
 - 编辑态：Enter 保存、Esc 取消；可改标题、分类、优先级（截止时间只能由 AI 理解生成，无手动入口）
 
-## AI 智能理解（依赖后端）
+## AI 智能理解（依赖后端，桌面壳走云端回退）
 
-- 入口组件 `src/components/VoiceInput.tsx`：探测 `/api/health` 可达才渲染（Web 可用；Tauri 桌面壳无后端则隐藏）。
-- 录音：`getUserMedia({audio:true})` + MediaRecorder，按能力优选 ASR 支持的编码 `audio/ogg;codecs=opus` / `audio/mp4`，最后经 onstop 后再停轨道以避免截尾。
+- 入口组件 `src/components/VoiceInput.tsx`：通过 `resolveApiBase()` 探测后端可达才渲染。
+- 录音：`getUserMedia({audio:true})` + MediaRecorder，按能力优选 ASR 支持的编码 `audio/ogg;codecs=opus` / `audio/mp4`，最后经 onstop 后再停轨道以避免截尾。桌面壳麦克风报错提示指向 macOS 系统设置（按 `window.location.protocol` 区分）。
+- **API 基址回退（v1.1.0）**：`src/lib/api.ts` 统一出口——`resolveApiBase()` 先探同源 `/api/health`（3s 超时），不通再探 `VITE_API_BASE_URL` 云端域名（构建期经 `.env.production` 注入，CI workflow 写入），结果缓存；`apiFetch()` 不可达返回 null 由调用方降级。后端 `server/server.ts` 对 /api 挂了 CORS 中间件（Allow-Origin: *，OPTIONS→204），桌面壳（tauri://localhost Origin）可跨域直连云端。
 - 后端 `server/routes/voice.ts`：
   - `POST /api/voice-todo`：接收 `{ audioBase64, mimeType }` → 扣子 ASR `recognize` 转写 → LLM 解析。
   - `POST /api/parse-todo`：接收 `{ text }` → LLM 直接理解文本（TodoForm 手动输入提交时调用，无 datetime-local 手动选时间）。
   - 两者共享 `parseTodoText`：LLM（`doubao-seed-2-0-mini-260215`，`invoke` 非流式）解析为 `{ title, priority, category, deadline?, location? }`，deadline 规整为 `YYYY-MM-DDTHH:mm`，location 为提取的简短地点名。
 - 走 `coze-coding-dev-sdk`（ASRClient / LLMClient / Config / HeaderUtils），消耗扣子额度；SDK 有 CJS 构建，tsup 到 `dist-server` 可正常打包（勿 external）。
-- 前端解析客户端在 `src/lib/parseTodo.ts`（`parseTodoText` + `deadlineStringToTs`）；解析失败/无后端时降级为按原文 + 表单所选分类优先级记下。
-- 语音入口的可用性依赖 Express 后端，桌面壳（纯静态）自动降级为纯手输。
+- 前端解析客户端在 `src/lib/parseTodo.ts`（`parseTodoText` + `deadlineStringToTs`，经 apiFetch）；解析失败/后端不可达时降级为按原文 + 表单所选分类优先级记下。
+- 桌面壳的 AI 能力依赖云端服务在线；离线时语音入口隐藏、文本理解降级。
 
 ## 倒计时与截止
 

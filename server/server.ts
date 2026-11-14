@@ -30,6 +30,18 @@ async function startServer(): Promise<Server> {
   app.use(express.json());
   app.use(express.urlencoded({ extended: true }));
 
+  // API 跨域支持：Tauri 桌面壳（tauri://localhost）跨域调用云端后端时使用
+  app.use('/api', (req, res, next) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    if (req.method === 'OPTIONS') {
+      res.status(204).end();
+      return;
+    }
+    next();
+  });
+
   // 注册 API 路由
   app.use(router);
 

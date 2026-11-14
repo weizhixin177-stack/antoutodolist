@@ -1,4 +1,5 @@
 import type { CategoryId, Priority } from '../types';
+import { apiFetch } from './api';
 
 /** AI 从一句话中理解出的待办草稿 */
 export interface ParsedTodoDraft {
@@ -19,12 +20,12 @@ export async function parseTodoText(
   text: string,
 ): Promise<ParsedTodoDraft | null> {
   try {
-    const resp = await fetch('/api/parse-todo', {
+    const resp = await apiFetch('/api/parse-todo', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ text }),
     });
-    if (!resp.ok) return null;
+    if (!resp || !resp.ok) return null;
     const data = (await resp.json()) as { parsed?: ParsedTodoDraft };
     return data.parsed && data.parsed.title ? data.parsed : null;
   } catch {
