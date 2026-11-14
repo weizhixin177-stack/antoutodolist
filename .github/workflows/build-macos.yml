@@ -1,11 +1,11 @@
-# macOS 安装包云端构建流水线
+# macOS 安装包云端构建流水线（Apple Silicon / M 系列专用）
 #
 # 触发方式：
 #   1. push 到 main/master 分支自动构建
 #   2. 仓库 Actions 页面手动「Run workflow」
 #
-# 产物：两个 dmg（Apple Silicon / Intel），在 Actions 运行详情页的
-# Artifacts 区下载，保留 14 天。
+# 产物：案头清单 dmg（aarch64，适配 M1/M2/M3/M4），在 Actions
+# 运行详情页的 Artifacts 区下载，保留 14 天。
 name: build-macos
 
 on:
@@ -15,17 +15,8 @@ on:
 
 jobs:
   build:
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          # Apple Silicon（M1/M2/M3/M4）
-          - runner: macos-latest
-            target: aarch64-apple-darwin
-          # Intel 芯片的老款 Mac
-          - runner: macos-13
-            target: x86_64-apple-darwin
-    runs-on: ${{ matrix.runner }}
+    # macos-latest 即 Apple Silicon runner，构建出的即是 M 系列安装包
+    runs-on: macos-latest
 
     steps:
       - name: 检出代码
@@ -40,18 +31,15 @@ jobs:
           node-version: 24
           cache: pnpm
 
-      - name: 添加 Rust 目标架构
-        run: rustup target add ${{ matrix.target }}
-
       - name: 安装前端依赖
         run: pnpm install --frozen-lockfile
 
-      - name: 构建 Tauri 应用（自动先执行 pnpm vite build）
-        run: pnpm tauri build -- --target ${{ matrix.target }}
+      - name: 构建 Tauri 应用（自动先执行 pnpm vite build，默认当前架构 aarch64）
+        run: pnpm tauri build
 
       - name: 上传 DMG 安装包
         uses: actions/upload-artifact@v4
         with:
-          name: 案头清单-${{ matrix.target }}
+          name: 案头清单-apple-silicon
           path: src-tauri/target/release/bundle/dmg/*.dmg
           retention-days: 14
