@@ -23,10 +23,9 @@
 ├── src/
 │   ├── components/
 │   │   ├── App 内引用：TodoForm(添加，含语音) / FilterBar(搜索+状态+分类+清空)
-│   │   ├── TodoItem.tsx        # 单条待办（勾选/行内编辑/删除/截止倒计时徽标）
+│   │   ├── TodoItem.tsx        # 单条待办（勾选/行内编辑/删除/卡片内嵌倒计时进度条）
 │   │   ├── SortableTodoItem.tsx# @dnd-kit 可拖拽包装，手柄 listeners
 │   │   ├── VoiceInput.tsx      # 麦克风语音输入（录音→后端识别→填充表单）
-│   │   ├── FocusTimer.tsx      # 全屏专注倒计时（大屏倒计时/到点提醒/切换任务）
 │   │   ├── StatsBar.tsx        # 总数/进行中/完成数/完成率进度条/高优提醒
 │   │   ├── EmptyState.tsx      # 空数据 / 无搜索结果
 │   │   └── ThemeToggle.tsx     # 深/浅色切换
@@ -96,8 +95,8 @@
 ## 倒计时与截止
 
 - `deadline` 为可选时间戳（ms）；新增/编辑经 `datetime-local` 转 `new Date(str).getTime()`。
-- 卡片徽标：`CountdownBadge`（未过期松绿 / 30 分钟内朱砂 / 超时朱砂加深）+ Timer 按钮进入全屏 `FocusTimer`。
-- 全屏 `src/components/FocusTimer.tsx`：`fixed inset-0` 覆盖，每秒 tick 刷新，`formatCountdown` 显示 HH:MM:SS，进度条按起止时间占比；到点用 Web Audio 合成铃音；支持切换任务、「标记完成」、「返回清单」。
+- 单界面原则：不做全屏倒计时页。倒计时内嵌在卡片元信息下方（`TodoItem.tsx` 内 `DeadlineProgress` 组件）。
+- `DeadlineProgress`：每秒 tick；左侧读秒「还剩/已超时 HH:MM:SS」，右侧截止时刻；下方细进度条按 (now-createdAt)/(deadline-createdAt) 填充；未过期松绿 / 30 分钟内朱砂 / 超时朱砂加深且充满。
 - 工具函数在 `src/lib/utils.ts`：`formatCountdown` / `describeDeadline` / `toDatetimeLocal` / `formatTime`。
 
 ## 关键排障记录

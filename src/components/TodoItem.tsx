@@ -10,7 +10,7 @@ import {
   X,
 } from 'lucide-react';
 import { CATEGORIES, CATEGORY_MAP, PRIORITIES, PRIORITY_MAP } from '../lib/constants';
-import { describeDeadline, formatTime, toDatetimeLocal } from '../lib/utils';
+import { formatCountdown, formatTime, toDatetimeLocal } from '../lib/utils';
 import type { CategoryId, Priority, Todo } from '../types';
 
 interface TodoItemViewProps {
@@ -27,13 +27,12 @@ interface TodoItemViewProps {
     deadline?: number,
   ) => void;
   onCancelEdit: () => void;
-  onFocus: (todo: Todo) => void;
   dragHandleProps?: Record<string, unknown>;
   dragging?: boolean;
 }
 
-/** 卡片上的实时倒计时标签 */
-function CountdownBadge({ deadline }: { deadline: number }) {
+/** 卡片内嵌倒计时进度条：随时间流逝填充，临近/超时转朱砂 */
+function DeadlineProgress({ deadline, createdAt }: { deadline: number; createdAt: number }) {
   const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
@@ -43,21 +42,45 @@ function CountdownBadge({ deadline }: { deadline: number }) {
 
   const overdue = deadline <= now;
   const urgent = !overdue && deadline - now < 30 * 60 * 1000;
-  const text = describeDeadline(deadline, now);
+  const total = Math.max(1, deadline - createdAt);
+  const pct = overdue ? 100 : Math.min(100, Math.max(0, ((now - createdAt) / total) * 100));
+  const remainSec = Math.floor(Math.abs(deadline - now) / 1000);
+
+  const barColor = overdue
+    ? 'bg-cinnabar-600 dark:bg-cinnabar-500'
+    : urgent
+      ? 'bg-cinnabar-500 dark:bg-cinnabar-400'
+      : 'bg-pine-500 dark:bg-[#5ea37e]';
+  const textColor =
+    overdue || urgent
+      ? 'text-cinnabar-600 dark:text-[#e88070]'
+      : 'text-pine-700 dark:text-[#5ea37e]';
 
   return (
-    <span
-      className={`inline-flex items-center gap-1 rounded-full px-1.5 py-px ${
-        overdue
-          ? 'bg-cinnabar-50 text-cinnabar-600 dark:bg-cinnabar-500/15 dark:text-[#e88070]'
-          : urgent
-            ? 'bg-cinnabar-50 text-cinnabar-600 dark:bg-cinnabar-500/15 dark:text-[#e88070]'
-            : 'bg-amber2-50 text-amber2-600 dark:bg-amber2-500/15 dark:text-[#e0b45a]'
-      }`}
-    >
-      <Timer className="h-3 w-3" strokeWidth={2} />
-      {text}
-    </span>
+    <div className="mt-1.5">
+      <div className="flex items-center justify-between gap-2 text-[11px] leading-4">
+        <span className={`inline-flex items-center gap-1 font-medium tabular-nums ${textColor}`}>
+          <Timer className="h-3 w-3" strokeWidth={2} />
+          {overdue ? '已超时' : '还剩'} {formatCountdown(remainSec)}
+        </span>
+        <span className="tabular-nums text-ink-faint/80 dark:text-[#7d7668]">
+          截止 {formatTime(deadline)}
+        </span>
+      </div>
+      <div
+        role="progressbar"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={Math.round(pct)}
+        aria-label="距截止时间进度"
+        className="mt-1 h-1 overflow-hidden rounded-full bg-ink/[0.07] dark:bg-white/10"
+      >
+        <div
+          className={`h-full rounded-full transition-[width] duration-1000 ease-linear ${barColor}`}
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+    </div>
   );
 }
 
@@ -69,7 +92,6 @@ export default function TodoItem({
   onStartEdit,
   onSaveEdit,
   onCancelEdit,
-  onFocus,
   dragHandleProps,
   dragging = false,
 }: TodoItemViewProps) {
@@ -134,27 +156,16 @@ export default function TodoItem({
               <span className={`h-1.5 w-1.5 rounded-full ${priority.dot}`} />
               {priority.label}优先级
             </span>
-            {todo.deadline && !todo.completed && (
-              <CountdownBadge deadline={todo.deadline} />
-            )}
             <span className="tabular-nums">{formatTime(todo.createdAt)}</span>
           </div>
+          {todo.deadline && !todo.completed && (
+            <DeadlineProgress deadline={todo.deadline} createdAt={todo.createdAt} />
+          )}
         </div>
       )}
 
       {!editing && (
         <div className="flex shrink-0 items-center gap-0.5">
-          {todo.deadline && !todo.completed && (
-            <button
-              type="button"
-              onClick={() => onFocus(todo)}
-              aria-label="开始倒计时"
-              title="开始倒计时"
-              className="rounded-lg p-1.5 text-pine-600 transition-colors hover:bg-pine-50 dark:text-[#5ea37e] dark:hover:bg-pine-500/15"
-            >
-              <Timer className="h-4 w-4" strokeWidth={1.9} />
-            </button>
-          )}
           <button
             type="button"
             onClick={() => onStartEdit(todo)}
