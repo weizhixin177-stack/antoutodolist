@@ -1,0 +1,57 @@
+# macOS 安装包云端构建流水线
+#
+# 触发方式：
+#   1. push 到 main/master 分支自动构建
+#   2. 仓库 Actions 页面手动「Run workflow」
+#
+# 产物：两个 dmg（Apple Silicon / Intel），在 Actions 运行详情页的
+# Artifacts 区下载，保留 14 天。
+name: build-macos
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, master]
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Apple Silicon（M1/M2/M3/M4）
+          - runner: macos-latest
+            target: aarch64-apple-darwin
+          # Intel 芯片的老款 Mac
+          - runner: macos-13
+            target: x86_64-apple-darwin
+    runs-on: ${{ matrix.runner }}
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 安装 pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: 安装 Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: 添加 Rust 目标架构
+        run: rustup target add ${{ matrix.target }}
+
+      - name: 安装前端依赖
+        run: pnpm install --frozen-lockfile
+
+      - name: 构建 Tauri 应用（自动先执行 pnpm vite build）
+        run: pnpm tauri build -- --target ${{ matrix.target }}
+
+      - name: 上传 DMG 安装包
+        uses: actions/upload-artifact@v4
+        with:
+          name: 案头清单-${{ matrix.target }}
+          path: src-tauri/target/release/bundle/dmg/*.dmg
+          retention-days: 14
