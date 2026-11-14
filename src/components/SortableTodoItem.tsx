@@ -15,8 +15,10 @@ interface SortableTodoItemProps {
     title: string,
     category: CategoryId,
     priority: Priority,
+    deadline?: number,
   ) => void;
   onCancelEdit: () => void;
+  onFocus: (todo: Todo) => void;
 }
 
 export default function SortableTodoItem(props: SortableTodoItemProps) {

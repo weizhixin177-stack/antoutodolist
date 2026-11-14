@@ -1,6 +1,9 @@
 import { Router } from 'express';
+import voiceRouter from './voice';
 
 const router = Router();
+
+router.use(voiceRouter);
 
 // API 路由示例
 router.get('/api/hello', (req, res) => {

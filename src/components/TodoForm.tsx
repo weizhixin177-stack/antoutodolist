@@ -1,23 +1,34 @@
 import { useState, type FormEvent } from 'react';
-import { CornerDownLeft, Plus } from 'lucide-react';
+import { CalendarClock, CornerDownLeft, Plus } from 'lucide-react';
 import { CATEGORIES, PRIORITIES } from '../lib/constants';
 import type { CategoryId, Priority } from '../types';
+import VoiceInput from './VoiceInput';
 
 interface TodoFormProps {
-  onAdd: (title: string, category: CategoryId, priority: Priority) => void;
+  onAdd: (
+    title: string,
+    category: CategoryId,
+    priority: Priority,
+    deadline?: number,
+  ) => void;
 }
 
 export default function TodoForm({ onAdd }: TodoFormProps) {
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState<CategoryId>('work');
   const [priority, setPriority] = useState<Priority>('medium');
+  const [deadline, setDeadline] = useState('');
+  const [voiceApplied, setVoiceApplied] = useState(false);
 
   const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const trimmed = title.trim();
     if (!trimmed) return;
-    onAdd(trimmed, category, priority);
+    const deadlineTs = deadline ? new Date(deadline).getTime() : undefined;
+    onAdd(trimmed, category, priority, deadlineTs);
     setTitle('');
+    setDeadline('');
+    setVoiceApplied(false);
   };
 
   return (
@@ -25,15 +36,33 @@ export default function TodoForm({ onAdd }: TodoFormProps) {
       onSubmit={handleSubmit}
       className="theme-aware animate-fade-up rounded-xl border border-ink/[0.07] bg-[#fffdf8] p-4 shadow-card dark:border-white/[0.08] dark:bg-[#1f1d19]"
     >
-      <input
-        type="text"
-        value={title}
-        onChange={(e) => setTitle(e.target.value)}
-        placeholder="写下一件待办，回车即可记下…"
-        maxLength={120}
-        aria-label="待办内容"
-        className="w-full bg-transparent text-base text-ink outline-none placeholder:text-ink-faint dark:text-[#ece7dc] dark:placeholder:text-[#7d7668]"
-      />
+      <div className="flex items-center gap-2">
+        <input
+          type="text"
+          value={title}
+          onChange={(e) => {
+            setTitle(e.target.value);
+            setVoiceApplied(false);
+          }}
+          placeholder={
+            voiceApplied
+              ? 'AI 已识别待办，可微调后回车记下…'
+              : '写下一件待办，回车即可记下；或用右侧麦克风语音输入'
+          }
+          maxLength={120}
+          aria-label="待办内容"
+          className="w-full bg-transparent text-base text-ink outline-none placeholder:text-ink-faint dark:text-[#ece7dc] dark:placeholder:text-[#7d7668]"
+        />
+        <VoiceInput
+          onParsed={(p) => {
+            setTitle(p.title);
+            setCategory(p.category);
+            setPriority(p.priority);
+            setDeadline(p.deadline ?? '');
+            setVoiceApplied(true);
+          }}
+        />
+      </div>
 
       <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-3 border-t border-ink/[0.06] pt-3 dark:border-white/[0.07]">
         <div
@@ -64,7 +93,18 @@ export default function TodoForm({ onAdd }: TodoFormProps) {
           })}
         </div>
 
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ml-auto flex flex-wrap items-center gap-2">
+          <label className="inline-flex items-center gap-1.5 rounded-lg border border-ink/10 bg-paper-deep px-2 py-1 text-xs text-ink-soft dark:border-white/10 dark:bg-white/[0.06] dark:text-[#a8a194]">
+            <CalendarClock className="h-3.5 w-3.5 text-pine-600 dark:text-[#5ea37e]" strokeWidth={2} />
+            <input
+              type="datetime-local"
+              value={deadline}
+              onChange={(e) => setDeadline(e.target.value)}
+              aria-label="截止时间（用于倒计时）"
+              className="bg-transparent text-ink outline-none dark:text-[#ece7dc] [&::-webkit-calendar-picker-indicator]:opacity-50"
+            />
+          </label>
+
           <div
             className="flex items-center gap-0.5 rounded-lg bg-paper-deep p-0.5 dark:bg-white/[0.06]"
             role="radiogroup"

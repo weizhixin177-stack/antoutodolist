@@ -17,13 +17,16 @@
 ├── scripts/                    # 构建与启动脚本（dev/build/start，勿改）
 ├── server/
 │   ├── routes/index.ts         # 示例 API（/api/hello /api/data /api/health）
+│   ├── routes/voice.ts         # 语音转待办 API（POST /api/voice-todo，ASR+LLM）
 │   ├── server.ts               # Express 入口（错误中间件必须 4 参数）
 │   └── vite.ts                 # Vite 中间件：勿 import vite.config 展开，否则插件重复注册
 ├── src/
 │   ├── components/
-│   │   ├── App 内引用：TodoForm(添加) / FilterBar(搜索+状态+分类+清空)
-│   │   ├── TodoItem.tsx        # 单条待办（勾选/行内编辑/删除）
+│   │   ├── App 内引用：TodoForm(添加，含语音) / FilterBar(搜索+状态+分类+清空)
+│   │   ├── TodoItem.tsx        # 单条待办（勾选/行内编辑/删除/截止倒计时徽标）
 │   │   ├── SortableTodoItem.tsx# @dnd-kit 可拖拽包装，手柄 listeners
+│   │   ├── VoiceInput.tsx      # 麦克风语音输入（录音→后端识别→填充表单）
+│   │   ├── FocusTimer.tsx      # 全屏专注倒计时（大屏倒计时/到点提醒/切换任务）
 │   │   ├── StatsBar.tsx        # 总数/进行中/完成数/完成率进度条/高优提醒
 │   │   ├── EmptyState.tsx      # 空数据 / 无搜索结果
 │   │   └── ThemeToggle.tsx     # 深/浅色切换
@@ -32,8 +35,8 @@
 │   │   └── useTheme.ts         # 主题持久化 + html.dark 切换
 │   ├── lib/
 │   │   ├── constants.ts        # 分类、优先级元数据与 Tailwind 类、示例数据
-│   │   └── utils.ts            # createId / formatTime
-│   ├── types.ts                # Todo / Priority / CategoryId / Filters
+│   │   └── utils.ts            # createId / formatTime / formatCountdown / describeDeadline
+│   ├── types.ts                # Todo(含 deadline?) / Priority / CategoryId / Filters
 │   ├── App.tsx                 # 状态中枢：增删改、筛选、统计、拖拽重排
 │   ├── main.tsx                # React 入口
 │   └── index.css               # Tailwind + 字体 + 主题变量 + 动效
@@ -75,12 +78,27 @@
 
 ## 数据与功能约定
 
-- Todo：`{ id, title, completed, category, priority, createdAt }`
+- Todo：`{ id, title, completed, category, priority, createdAt, deadline? }`
 - 分类固定 4 项：work / life / study / other；优先级：high / medium / low
 - 存储 key：`antou.todos.v1`、`antou.theme.v1`
 - 拖拽重排基于**筛选后的可见列表**计算 index，再映射回完整数组，保持隐藏项槽位
 - 清空已完成需二次点击确认（3s 超时复位）
-- 编辑态：Enter 保存、Esc 取消；同时可改分类与优先级
+- 编辑态：Enter 保存、Esc 取消；同时可改分类、优先级、截止时间
+
+## 语音输入 AI 识别（依赖后端）
+
+- 入口组件 `src/components/VoiceInput.tsx`：探测 `/api/health` 可达才渲染（Web 可用；Tauri 桌面壳无后端则隐藏）。
+- 录音：`getUserMedia({audio:true})` + MediaRecorder，按能力优选 ASR 支持的编码 `audio/ogg;codecs=opus` / `audio/mp4`，最后经 onstop 后再停轨道以避免截尾。
+- 后端 `server/routes/voice.ts` 的 `POST /api/voice-todo`：接收 `{ audioBase64, mimeType }` → 扣子 ASR `recognize` 转写 → LLM（`doubao-seed-2-0-mini-260215`，`invoke` 非流式）解析为 `{ title, priority, category, deadline }`，deadline 规整为 `YYYY-MM-DDTHH:mm`。
+- 走 `coze-coding-dev-sdk`（ASRClient / LLMClient / Config / HeaderUtils），消耗扣子额度；SDK 有 CJS 构建，tsup 到 `dist-server` 可正常打包（勿 external）。
+- 语音入口的可用性依赖 Express 后端，桌面壳（纯静态）自动降级为纯手输。
+
+## 倒计时与截止
+
+- `deadline` 为可选时间戳（ms）；新增/编辑经 `datetime-local` 转 `new Date(str).getTime()`。
+- 卡片徽标：`CountdownBadge`（未过期松绿 / 30 分钟内朱砂 / 超时朱砂加深）+ Timer 按钮进入全屏 `FocusTimer`。
+- 全屏 `src/components/FocusTimer.tsx`：`fixed inset-0` 覆盖，每秒 tick 刷新，`formatCountdown` 显示 HH:MM:SS，进度条按起止时间占比；到点用 Web Audio 合成铃音；支持切换任务、「标记完成」、「返回清单」。
+- 工具函数在 `src/lib/utils.ts`：`formatCountdown` / `describeDeadline` / `toDatetimeLocal` / `formatTime`。
 
 ## 关键排障记录
 

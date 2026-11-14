@@ -9,6 +9,8 @@ export interface Todo {
   category: CategoryId;
   priority: Priority;
   createdAt: number;
+  /** 截止时间（毫秒时间戳），用于倒计时 */
+  deadline?: number;
 }
 
 export type StatusFilter = 'all' | 'active' | 'completed';

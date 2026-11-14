@@ -19,6 +19,7 @@ import StatsBar from './components/StatsBar';
 import FilterBar from './components/FilterBar';
 import SortableTodoItem from './components/SortableTodoItem';
 import EmptyState from './components/EmptyState';
+import FocusTimer from './components/FocusTimer';
 import ThemeToggle from './components/ThemeToggle';
 import { useLocalStorage } from './hooks/useLocalStorage';
 import { useTheme } from './hooks/useTheme';
@@ -55,6 +56,7 @@ export default function App() {
     keyword: '',
   });
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [focusId, setFocusId] = useState<string | null>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -94,10 +96,20 @@ export default function App() {
     [todos, filters],
   );
 
+  const focusCandidates = useMemo(
+    () => todos.filter((t) => t.deadline && !t.completed),
+    [todos],
+  );
+  const focusTodo = useMemo(
+    () => todos.find((t) => t.id === focusId) ?? null,
+    [todos, focusId],
+  );
+
   const addTodo = (
     title: string,
     category: CategoryId,
     priority: Priority,
+    deadline?: number,
   ) => {
     const todo: Todo = {
       id: createId(),
@@ -106,6 +118,7 @@ export default function App() {
       category,
       priority,
       createdAt: Date.now(),
+      deadline: deadline && !Number.isNaN(deadline) ? deadline : undefined,
     };
     setTodos((prev) => [todo, ...prev]);
   };
@@ -126,9 +139,21 @@ export default function App() {
     title: string,
     category: CategoryId,
     priority: Priority,
+    deadline?: number,
   ) => {
     setTodos((prev) =>
-      prev.map((t) => (t.id === id ? { ...t, title, category, priority } : t)),
+      prev.map((t) =>
+        t.id === id
+          ? {
+              ...t,
+              title,
+              category,
+              priority,
+              deadline:
+                deadline && !Number.isNaN(deadline) ? deadline : undefined,
+            }
+          : t,
+      ),
     );
     setEditingId(null);
   };
@@ -229,6 +254,7 @@ export default function App() {
                       onStartEdit={(t) => setEditingId(t.id)}
                       onSaveEdit={saveEdit}
                       onCancelEdit={() => setEditingId(null)}
+                      onFocus={(t) => setFocusId(t.id)}
                     />
                   ))}
                 </ul>
@@ -238,6 +264,20 @@ export default function App() {
               拖动右侧手柄可调整顺序
             </p>
           </>
+        )}
+
+        {focusTodo && (
+          <FocusTimer
+            key={focusTodo.id}
+            todo={focusTodo}
+            candidates={focusCandidates}
+            onPick={(t) => setFocusId(t.id)}
+            onComplete={(id) => {
+              toggleTodo(id);
+              setFocusId(null);
+            }}
+            onClose={() => setFocusId(null)}
+          />
         )}
       </div>
     </main>

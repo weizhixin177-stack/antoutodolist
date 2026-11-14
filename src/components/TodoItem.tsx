@@ -1,7 +1,16 @@
 import { useEffect, useRef, useState } from 'react';
-import { Check, GripVertical, Pencil, Save, Trash2, X } from 'lucide-react';
+import {
+  CalendarClock,
+  Check,
+  GripVertical,
+  Pencil,
+  Save,
+  Timer,
+  Trash2,
+  X,
+} from 'lucide-react';
 import { CATEGORIES, CATEGORY_MAP, PRIORITIES, PRIORITY_MAP } from '../lib/constants';
-import { formatTime } from '../lib/utils';
+import { describeDeadline, formatTime, toDatetimeLocal } from '../lib/utils';
 import type { CategoryId, Priority, Todo } from '../types';
 
 interface TodoItemViewProps {
@@ -15,10 +24,41 @@ interface TodoItemViewProps {
     title: string,
     category: CategoryId,
     priority: Priority,
+    deadline?: number,
   ) => void;
   onCancelEdit: () => void;
+  onFocus: (todo: Todo) => void;
   dragHandleProps?: Record<string, unknown>;
   dragging?: boolean;
+}
+
+/** 卡片上的实时倒计时标签 */
+function CountdownBadge({ deadline }: { deadline: number }) {
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, []);
+
+  const overdue = deadline <= now;
+  const urgent = !overdue && deadline - now < 30 * 60 * 1000;
+  const text = describeDeadline(deadline, now);
+
+  return (
+    <span
+      className={`inline-flex items-center gap-1 rounded-full px-1.5 py-px ${
+        overdue
+          ? 'bg-cinnabar-50 text-cinnabar-600 dark:bg-cinnabar-500/15 dark:text-[#e88070]'
+          : urgent
+            ? 'bg-cinnabar-50 text-cinnabar-600 dark:bg-cinnabar-500/15 dark:text-[#e88070]'
+            : 'bg-amber2-50 text-amber2-600 dark:bg-amber2-500/15 dark:text-[#e0b45a]'
+      }`}
+    >
+      <Timer className="h-3 w-3" strokeWidth={2} />
+      {text}
+    </span>
+  );
 }
 
 export default function TodoItem({
@@ -29,6 +69,7 @@ export default function TodoItem({
   onStartEdit,
   onSaveEdit,
   onCancelEdit,
+  onFocus,
   dragHandleProps,
   dragging = false,
 }: TodoItemViewProps) {
@@ -70,7 +111,7 @@ export default function TodoItem({
         <EditForm
           key="edit"
           todo={todo}
-          onSave={(title, cat, pri) => onSaveEdit(todo.id, title, cat, pri)}
+          onSave={(title, cat, pri, dl) => onSaveEdit(todo.id, title, cat, pri, dl)}
           onCancel={onCancelEdit}
         />
       ) : (
@@ -93,6 +134,9 @@ export default function TodoItem({
               <span className={`h-1.5 w-1.5 rounded-full ${priority.dot}`} />
               {priority.label}优先级
             </span>
+            {todo.deadline && !todo.completed && (
+              <CountdownBadge deadline={todo.deadline} />
+            )}
             <span className="tabular-nums">{formatTime(todo.createdAt)}</span>
           </div>
         </div>
@@ -100,6 +144,17 @@ export default function TodoItem({
 
       {!editing && (
         <div className="flex shrink-0 items-center gap-0.5">
+          {todo.deadline && !todo.completed && (
+            <button
+              type="button"
+              onClick={() => onFocus(todo)}
+              aria-label="开始倒计时"
+              title="开始倒计时"
+              className="rounded-lg p-1.5 text-pine-600 transition-colors hover:bg-pine-50 dark:text-[#5ea37e] dark:hover:bg-pine-500/15"
+            >
+              <Timer className="h-4 w-4" strokeWidth={1.9} />
+            </button>
+          )}
           <button
             type="button"
             onClick={() => onStartEdit(todo)}
@@ -133,7 +188,12 @@ export default function TodoItem({
 
 interface EditFormProps {
   todo: Todo;
-  onSave: (title: string, category: CategoryId, priority: Priority) => void;
+  onSave: (
+    title: string,
+    category: CategoryId,
+    priority: Priority,
+    deadline?: number,
+  ) => void;
   onCancel: () => void;
 }
 
@@ -141,6 +201,9 @@ function EditForm({ todo, onSave, onCancel }: EditFormProps) {
   const [title, setTitle] = useState(todo.title);
   const [category, setCategory] = useState<CategoryId>(todo.category);
   const [priority, setPriority] = useState<Priority>(todo.priority);
+  const [deadline, setDeadline] = useState(
+    todo.deadline ? toDatetimeLocal(todo.deadline) : '',
+  );
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -151,8 +214,12 @@ function EditForm({ todo, onSave, onCancel }: EditFormProps) {
   const handleSave = () => {
     const trimmed = title.trim();
     if (!trimmed) return;
-    onSave(trimmed, category, priority);
+    const deadlineTs = deadline ? new Date(deadline).getTime() : undefined;
+    onSave(trimmed, category, priority, deadlineTs);
   };
+
+  const selectCls =
+    'rounded-lg border border-ink/15 bg-paper px-2 py-1 text-xs text-ink-soft outline-none dark:border-white/15 dark:bg-[#26241f] dark:text-[#cfc8ba] [&>option]:dark:bg-[#26241f]';
 
   return (
     <div className="min-w-0 flex-1 space-y-2.5">
@@ -169,12 +236,12 @@ function EditForm({ todo, onSave, onCancel }: EditFormProps) {
         aria-label="编辑待办内容"
         className="w-full rounded-lg border border-pine-500/50 bg-transparent px-2.5 py-1.5 text-[15px] text-ink outline-none dark:text-[#ece7dc]"
       />
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <select
           value={category}
           onChange={(e) => setCategory(e.target.value as CategoryId)}
           aria-label="编辑分类"
-          className="rounded-lg border border-ink/15 bg-paper px-2 py-1 text-xs text-ink-soft outline-none dark:border-white/15 dark:bg-[#26241f] dark:text-[#cfc8ba] [&>option]:dark:bg-[#26241f]"
+          className={selectCls}
         >
           {CATEGORIES.map((item) => (
             <option key={item.id} value={item.id}>
@@ -186,7 +253,7 @@ function EditForm({ todo, onSave, onCancel }: EditFormProps) {
           value={priority}
           onChange={(e) => setPriority(e.target.value as Priority)}
           aria-label="编辑优先级"
-          className="rounded-lg border border-ink/15 bg-paper px-2 py-1 text-xs text-ink-soft outline-none dark:border-white/15 dark:bg-[#26241f] dark:text-[#cfc8ba] [&>option]:dark:bg-[#26241f]"
+          className={selectCls}
         >
           {PRIORITIES.map((item) => (
             <option key={item.id} value={item.id}>
@@ -194,6 +261,22 @@ function EditForm({ todo, onSave, onCancel }: EditFormProps) {
             </option>
           ))}
         </select>
+        <label
+          title="截止时间（用于倒计时）"
+          className={`inline-flex items-center gap-1.5 ${selectCls}`}
+        >
+          <CalendarClock
+            className="h-3.5 w-3.5 text-pine-600 dark:text-[#5ea37e]"
+            strokeWidth={2}
+          />
+          <input
+            type="datetime-local"
+            value={deadline}
+            onChange={(e) => setDeadline(e.target.value)}
+            aria-label="编辑截止时间"
+            className="bg-transparent text-xs text-ink-soft outline-none dark:text-[#cfc8ba] [&::-webkit-calendar-picker-indicator]:opacity-50"
+          />
+        </label>
         <div className="ml-auto flex items-center gap-1">
           <button
             type="button"
